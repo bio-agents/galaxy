@@ -1,0 +1,1242 @@
+<%def name="common_javascripts(repository)">
+    <script type="text/javascript">
+        $(function(){
+
+            // --- Initialize sample trees
+            $("#tree").dynatree({
+                title: "${repository.name}",
+                minExpandLevel: 1,
+                persist: false,
+                checkbox: true,
+                selectMode: 3,
+                onPostInit: function(isReloading, isError) {
+                    // Re-fire onActivate, so the text is updated
+                    this.reactivate();
+                }, 
+                fx: { height: "toggle", duration: 200 },
+                // initAjax is hard to fake, so we pass the children as object array:
+                initAjax: {url: "${h.url_for( controller='repository', action='open_folder' )}",
+                           dataType: "json", 
+                           data: { folder_path: "${repository.repo_path( trans.app )}" },
+                },
+                onLazyRead: function(dtnode){
+                    dtnode.appendAjax({
+                        url: "${h.url_for( controller='repository', action='open_folder' )}", 
+                        dataType: "json",
+                        data: { folder_path: dtnode.data.key },
+                    });
+                },
+                onSelect: function(select, dtnode) {
+                    // Display list of selected nodes
+                    var selNodes = dtnode.tree.getSelectedNodes();
+                    // convert to title/key array
+                    var selKeys = $.map(selNodes, function(node) {
+                        return node.data.key;
+                    });
+                    if (document.forms["select_files_to_delete"]) {
+                        // The following is used only ~/templates/webapps/agent_shed/repository/browse_repository.mako.
+                        document.select_files_to_delete.selected_files_to_delete.value = selKeys.join(",");
+                    }
+                    // The following is used only in ~/templates/webapps/agent_shed/repository/upload.mako.
+                    if (document.forms["upload_form"]) {
+                        document.upload_form.upload_point.value = selKeys.slice(-1);
+                    }
+                },
+                onActivate: function(dtnode) {
+                    var cell = $("#file_contents");
+                    var selected_value;
+                     if (dtnode.data.key == 'root') {
+                        selected_value = "${repository.repo_path( trans.app )}/";
+                    } else {
+                        selected_value = dtnode.data.key;
+                    };
+                    if (selected_value.charAt(selected_value.length-1) != '/') {
+                        // Make ajax call
+                        $.ajax( {
+                            type: "POST",
+                            url: "${h.url_for( controller='repository', action='get_file_contents' )}",
+                            dataType: "json",
+                            data: { file_path: selected_value },
+                            success : function ( data ) {
+                                cell.html( '<label>'+data+'</label>' )
+                            }
+                        });
+                    } else {
+                        cell.html( '' );
+                    };
+                },
+            });
+        });
+    </script>
+</%def>
+
+<%def name="container_javascripts()">
+    <script type="text/javascript">
+        var init_dependencies = function() {
+            var storage_id = "library-expand-state-${trans.security.encode_id(10000)}";
+            var restore_folder_state = function() {
+                var state = $.jStorage.get(storage_id);
+                if (state) {
+                    for (var id in state) {
+                        if (state[id] === true) {
+                            var row = $("#" + id),
+                                index = row.parent().children().index(row);
+                            row.addClass("expanded").show();
+                            row.siblings().filter("tr[parent='" + index + "']").show();
+                        }
+                    }
+                }
+            };
+            var save_folder_state = function() {
+                var state = {};
+                $("tr.folderRow").each( function() {
+                    var folder = $(this);
+                    state[folder.attr("id")] = folder.hasClass("expanded");
+                });
+                $.jStorage.set(storage_id, state);
+            };
+            $(".container-table").each(function() {
+                //var container_id = this.id.split( "-" )[0];
+                //alert( container_id );
+                var child_of_parent_cache = {};
+                // Recursively fill in children and descendants of each row
+                var process_row = function(q, parents) {
+                    // Find my index
+                    var parent = q.parent(),
+                        this_level = child_of_parent_cache[parent] || (child_of_parent_cache[parent] = parent.children());
+                    var index = this_level.index(q);
+                    // Find my immediate children
+                    var children = $(par_child_dict[index]);
+                    // Recursively handle them
+                    var descendants = children;
+                    children.each( function() {
+                        child_descendants = process_row( $(this), parents.add(q) );
+                        descendants = descendants.add(child_descendants);
+                    });
+                    // Set up expand / hide link
+                    var expand_fn = function() {
+                        if ( q.hasClass("expanded") ) {
+                            descendants.hide();
+                            descendants.removeClass("expanded");
+                            q.removeClass("expanded");
+                        } else {
+                            children.show();
+                            q.addClass("expanded");
+                        }
+                        save_folder_state();
+                    };
+                    $("." + q.attr("id") + "-click").click(expand_fn);
+                    // return descendants for use by parent
+                    return descendants;
+                }
+                // Initialize dict[parent_id] = rows_which_have_that_parent_id_as_parent_attr
+                var par_child_dict = {},
+                    no_parent = [];
+                $(this).find("tbody tr").each( function() {
+                    if ( $(this).attr("parent")) {
+                        var parent = $(this).attr("parent");
+                        if (par_child_dict[parent] !== undefined) {
+                            par_child_dict[parent].push(this);
+                        } else {
+                            par_child_dict[parent] = [this];
+                        }
+                    } else {
+                        no_parent.push(this);
+                    }                        
+                });
+                $(no_parent).each( function() {
+                    descendants = process_row( $(this), $([]) );
+                    descendants.hide();
+               });
+            });
+            restore_folder_state();
+        };
+
+        var init_clipboard = function() {
+                %if hasattr( repository, 'clone_url' ):
+                    $('#clone_clipboard').on('click', function( event ) {
+                        event.preventDefault();
+                        window.prompt("Copy to clipboard: Ctrl+C, Enter", "hg clone ${ repository.clone_url }");
+                    });           
+                %endif
+                %if hasattr( repository, 'share_url' ):
+                    $('#share_clipboard').on('click', function( event ) {
+                        event.preventDefault();
+                        window.prompt("Copy to clipboard: Ctrl+C, Enter", "${ repository.share_url }");
+                    });
+                %endif
+        };
+
+        $(function() {
+            init_dependencies();
+            init_clipboard();
+        });
+    </script>
+</%def>
+
+<%def name="render_repository_type_select_field( repository_type_select_field, render_help=True )">
+    <div class="form-row">
+        <label>Repository type:</label>
+        <%
+            from agent_shed.repository_types import util
+            options = repository_type_select_field.options
+            repository_types = []
+            for option_tup in options:
+                repository_types.append( option_tup[ 1 ] )
+            render_as_text = len( options ) == 1
+            if render_as_text:
+                repository_type = options[ 0 ][ 0 ]
+        %>
+        %if render_as_text:
+            ${repository_type | h}
+            %if render_help:
+                <div class="agentParamHelp" style="clear: both;">
+                    This repository's type cannot be changed because its contents are valid only for its current type or it has been cloned.
+                </div>
+            %endif
+        %else:
+            ${repository_type_select_field.get_html()}
+            %if render_help:
+                <div class="agentParamHelp" style="clear: both;">
+                    Select the repository type based on the following criteria.
+                    <ul>
+                        %if util.UNRESTRICTED in repository_types:
+                            <li><b>Unrestricted</b> - contents can be any set of valid Galaxy utilities or files
+                        %endif
+                        %if util.REPOSITORY_SUITE_DEFINITION in repository_types:
+                            <li><b>Repository suite definition</b> - contents will always be restricted to one file named repository_dependencies.xml
+                        %endif
+                        %if util.TOOL_DEPENDENCY_DEFINITION in repository_types:
+                            <li><b>Agent dependency definition</b> - contents will always be restricted to one file named agent_dependencies.xml
+                        %endif
+                    </ul>
+                </div>
+            %endif
+        %endif
+        <div style="clear: both"></div>
+    </div>
+</%def>         
+            
+<%def name="render_sharable_str( repository, changeset_revision=None )">
+    <%
+        from agent_shed.util.shed_util_common import generate_sharable_link_for_repository_in_agent_shed
+        sharable_link = generate_sharable_link_for_repository_in_agent_shed( repository, changeset_revision=changeset_revision )
+    %>
+    <a href="${ sharable_link }" target="_blank">${ sharable_link }</a>
+</%def>
+
+<%def name="render_clone_str( repository )"><%
+        from agent_shed.util.common_util import generate_clone_url_for_repository_in_agent_shed
+        clone_str = generate_clone_url_for_repository_in_agent_shed( trans.user, repository )
+    %>hg clone ${ clone_str }</%def>
+
+<%def name="render_folder( folder, folder_pad, parent=None, row_counter=None, is_root_folder=False, render_repository_actions_for='agent_shed' )">
+    <%
+        encoded_id = trans.security.encode_id( folder.id )
+        
+        if is_root_folder:
+            pad = folder_pad
+            expander = h.url_for("/static/images/silk/resultset_bottom.png")
+            folder_img = h.url_for("/static/images/silk/folder_page.png")
+        else:
+            pad = folder_pad + 20
+            expander = h.url_for("/static/images/silk/resultset_next.png")
+            folder_img = h.url_for("/static/images/silk/folder.png")
+        my_row = None
+    %>
+    %if not is_root_folder:
+        <%
+            if parent is None:
+                bg_str = 'bgcolor="#D8D8D8"'
+            else:
+                bg_str = ''
+        %>
+        <tr id="folder-${encoded_id}" ${bg_str} class="folderRow libraryOrFolderRow"
+            %if parent is not None:
+                parent="${parent}"
+                style="display: none;"
+            %endif
+            >
+            <%
+                col_span_str = ''
+                folder_label = str( folder.label )
+                if folder.datatypes:
+                    col_span_str = 'colspan="4"'
+                elif folder.label == 'Missing agent dependencies':
+                    if folder.description:
+                        folder_label = "%s<i> - %s</i>" % ( folder_label, folder.description )
+                    else:
+                        folder_label = "%s<i> - repository agents require handling of these missing dependencies</i>" % folder_label
+                    col_span_str = 'colspan="5"'
+                elif folder.label in [ 'Installed repository dependencies', 'Repository dependencies', 'Missing repository dependencies' ]:
+                    if folder.description:
+                        folder_label = "%s<i> - %s</i>" % ( folder_label, folder.description )
+                    elif folder.label not in [ 'Installed repository dependencies' ] and folder.parent.label not in [ 'Installation errors' ]:
+                        folder_label = "%s<i> - installation of these additional repositories is required</i>" % folder_label
+                    if trans.webapp.name == 'galaxy':
+                        col_span_str = 'colspan="4"'
+                elif folder.label == 'Invalid repository dependencies':
+                    folder_label = "%s<i> - click the repository dependency to see why it is invalid</i>" % folder_label
+                elif folder.label == 'Invalid agent dependencies':
+                    folder_label = "%s<i> - click the agent dependency to see why it is invalid</i>" % folder_label
+                elif folder.label == 'Valid agents':
+                    col_span_str = 'colspan="3"'
+                    if folder.description:
+                        folder_label = "%s<i> - %s</i>" % ( folder_label, folder.description )
+                    else:
+                        folder_label = "%s<i> - click the name to preview the agent and use the pop-up menu to inspect all metadata</i>" % folder_label
+                elif folder.invalid_agents:
+                    if trans.webapp.name == 'agent_shed':
+                        folder_label = "%s<i> - click the agent config file name to see why the agent is invalid</i>" % folder_label
+                elif folder.agent_dependencies:
+                    if folder.description:
+                        folder_label = "%s<i> - %s</i>" % ( folder_label, folder.description )
+                    else:
+                        folder_label = "%s<i> - repository agents require handling of these dependencies</i>" % folder_label
+                    col_span_str = 'colspan="4"'
+                elif folder.workflows:
+                    if folder.description:
+                        folder_label = "%s<i> - %s</i>" % ( folder_label, folder.description )
+                    else:
+                        folder_label = "%s<i> - click the name to view an SVG image of the workflow</i>" % folder_label
+                    col_span_str = 'colspan="4"'
+                elif folder.valid_data_managers:
+                    if folder.description:
+                        folder_label = "%s<i> - %s</i>" % ( folder_label, folder.description )
+                    col_span_str = 'colspan="3"'
+                elif folder.invalid_data_managers:
+                    if folder.description:
+                        folder_label = "%s<i> - %s</i>" % ( folder_label, folder.description )
+                    col_span_str = 'colspan="2"'
+            %>
+            <td ${col_span_str} style="padding-left: ${folder_pad}px;">
+                <span class="expandLink folder-${encoded_id}-click">
+                    <div style="float: left; margin-left: 2px;" class="expandLink folder-${encoded_id}-click">
+                        <a class="folder-${encoded_id}-click" href="javascript:void(0);">
+                            ${folder_label}
+                        </a>
+                    </div>
+                </span>
+            </td>
+        </tr>
+        <%
+            my_row = row_counter.count
+            row_counter.increment()  
+        %>
+    %endif
+    %for sub_folder in folder.folders:
+        ${render_folder( sub_folder, pad, parent=my_row, row_counter=row_counter, is_root_folder=False, render_repository_actions_for=render_repository_actions_for )}
+    %endfor
+    %for readme in folder.readme_files:
+        ${render_readme( readme, pad, my_row, row_counter, render_repository_actions_for=render_repository_actions_for )}
+    %endfor
+    %for invalid_repository_dependency in folder.invalid_repository_dependencies:
+        ${render_invalid_repository_dependency( invalid_repository_dependency, pad, my_row, row_counter, render_repository_actions_for=render_repository_actions_for )}
+    %endfor
+    %for index, repository_dependency in enumerate( folder.repository_dependencies ):
+        <% row_is_header = index == 0 %>
+        ${render_repository_dependency( repository_dependency, pad, my_row, row_counter, row_is_header, render_repository_actions_for=render_repository_actions_for )}
+    %endfor
+    %for invalid_agent_dependency in folder.invalid_agent_dependencies:
+        ${render_invalid_agent_dependency( invalid_agent_dependency, pad, my_row, row_counter, render_repository_actions_for=render_repository_actions_for )}
+    %endfor
+    %for index, agent_dependency in enumerate( folder.agent_dependencies ):
+        <% row_is_header = index == 0 %>
+        ${render_agent_dependency( agent_dependency, pad, my_row, row_counter, row_is_header, render_repository_actions_for=render_repository_actions_for )}
+    %endfor
+    %if folder.valid_agents:
+        %for index, agent in enumerate( folder.valid_agents ):
+            <% row_is_header = index == 0 %>
+            ${render_agent( agent, pad, my_row, row_counter, row_is_header, render_repository_actions_for=render_repository_actions_for )}
+        %endfor
+    %endif
+    %for invalid_agent in folder.invalid_agents:
+        ${render_invalid_agent( invalid_agent, pad, my_row, row_counter, render_repository_actions_for=render_repository_actions_for )}
+    %endfor
+    %if folder.workflows:
+        %for index, workflow in enumerate( folder.workflows ):
+            <% row_is_header = index == 0 %>
+            ${render_workflow( workflow, pad, my_row, row_counter, row_is_header, render_repository_actions_for=render_repository_actions_for )}
+        %endfor
+    %endif
+    %if folder.datatypes:
+        %for index, datatype in enumerate( folder.datatypes ):
+            <% row_is_header = index == 0 %>
+            ${render_datatype( datatype, pad, my_row, row_counter, row_is_header, render_repository_actions_for=render_repository_actions_for )}
+        %endfor
+    %endif
+    %if folder.valid_data_managers:
+        %for index, data_manager in enumerate( folder.valid_data_managers ):
+            <% row_is_header = index == 0 %>
+            ${render_valid_data_manager( data_manager, pad, my_row, row_counter, row_is_header, render_repository_actions_for=render_repository_actions_for )}
+        %endfor
+    %endif
+    %if folder.invalid_data_managers:
+        %for index, data_manager in enumerate( folder.invalid_data_managers ):
+            <% row_is_header = index == 0 %>
+            ${render_invalid_data_manager( data_manager, pad, my_row, row_counter, row_is_header, render_repository_actions_for=render_repository_actions_for )}
+        %endfor
+    %endif
+    %if folder.test_environments:
+        %for test_environment in folder.test_environments:
+            ${render_test_environment( test_environment, pad, my_row, row_counter, render_repository_actions_for=render_repository_actions_for )}
+        %endfor
+    %endif
+    %if folder.failed_tests:
+        %for failed_test in folder.failed_tests:
+            ${render_failed_test( failed_test, pad, my_row, row_counter, render_repository_actions_for=render_repository_actions_for )}
+        %endfor
+    %endif
+    %if folder.not_tested:
+        %for not_tested in folder.not_tested:
+            ${render_not_tested( not_tested, pad, my_row, row_counter, render_repository_actions_for=render_repository_actions_for )}
+        %endfor
+    %endif
+    %if folder.passed_tests:
+        %for passed_test in folder.passed_tests:
+            ${render_passed_test( passed_test, pad, my_row, row_counter, render_repository_actions_for=render_repository_actions_for )}
+        %endfor
+    %endif
+    %if folder.missing_test_components:
+        %for missing_test_component in folder.missing_test_components:
+            ${render_missing_test_component( missing_test_component, pad, my_row, row_counter, render_repository_actions_for=render_repository_actions_for )}
+        %endfor
+    %endif
+    %if folder.agent_dependency_installation_errors:
+        %for agent_dependency_installation_error in folder.agent_dependency_installation_errors:
+            ${render_agent_dependency_installation_error( agent_dependency_installation_error, pad, my_row, row_counter, render_repository_actions_for=render_repository_actions_for )}
+        %endfor
+    %endif
+    %if folder.agent_dependency_successful_installations:
+        %for agent_dependency_successful_installation in folder.agent_dependency_successful_installations:
+            ${render_agent_dependency_successful_installation( agent_dependency_successful_installation, pad, my_row, row_counter, render_repository_actions_for=render_repository_actions_for )}
+        %endfor
+    %endif
+    %if folder.repository_installation_errors:
+        %for repository_installation_error in folder.repository_installation_errors:
+            ${render_repository_installation_error( repository_installation_error, pad, my_row, row_counter, is_current_repository=False, render_repository_actions_for=render_repository_actions_for )}
+        %endfor
+    %endif
+    %if folder.current_repository_installation_errors:
+        %for repository_installation_error in folder.current_repository_installation_errors:
+            ${render_repository_installation_error( repository_installation_error, pad, my_row, row_counter, is_current_repository=True, render_repository_actions_for=render_repository_actions_for )}
+        %endfor
+    %endif
+    %if folder.repository_successful_installations:
+        %for repository_successful_installation in folder.repository_successful_installations:
+            ${render_repository_successful_installation( repository_successful_installation, pad, my_row, row_counter, render_repository_actions_for=render_repository_actions_for )}
+        %endfor
+    %endif
+</%def>
+
+<%def name="render_datatype( datatype, pad, parent, row_counter, row_is_header=False, render_repository_actions_for='agent_shed' )">
+    <%
+        encoded_id = trans.security.encode_id( datatype.id )
+        if row_is_header:
+            cell_type = 'th'
+        else:
+            cell_type = 'td'
+    %>
+    <tr class="datasetRow"
+        %if parent is not None:
+            parent="${parent}"
+        %endif
+        id="libraryItem-rd-${encoded_id}">
+        <${cell_type} style="padding-left: ${pad+20}px;">${datatype.extension | h}</${cell_type}>
+        <${cell_type}>${datatype.type | h}</${cell_type}>
+        <${cell_type}>${datatype.mimetype | h}</${cell_type}>
+        <${cell_type}>${datatype.subclass | h}</${cell_type}>
+    </tr>
+    <%
+        my_row = row_counter.count
+        row_counter.increment()
+    %>
+</%def>
+
+<%def name="render_failed_test( failed_test, pad, parent, row_counter, row_is_header=False, render_repository_actions_for='agent_shed' )">
+    <% 
+        from agent_shed.util.basic_util import to_html_string
+        encoded_id = trans.security.encode_id( failed_test.id )
+    %>
+    <tr class="datasetRow"
+        %if parent is not None:
+            parent="${parent}"
+        %endif
+        id="libraryItem-rft-${encoded_id}">
+        <td style="padding-left: ${pad+20}px;">
+            <table id="test_environment">
+                <tr><td bgcolor="#FFFFCC"><b>Agent id:</b> ${failed_test.agent_id | h}</td></tr>
+                <tr><td><b>Agent version:</b> ${failed_test.agent_id | h}</td></tr>
+                <tr><td><b>Test:</b> ${failed_test.test_id | h}</td></tr>
+                <tr><td><b>Stderr:</b> <br/>${ to_html_string( failed_test.stderr ) }</td></tr>
+                <tr><td><b>Traceback:</b> <br/>${ to_html_string( failed_test.traceback ) }</td></tr>
+            </table>
+        </td>
+    </tr>
+    <%
+        my_row = row_counter.count
+        row_counter.increment()
+    %>
+</%def>
+
+<%def name="render_invalid_data_manager( data_manager, pad, parent, row_counter, row_is_header=False, render_repository_actions_for='agent_shed' )">
+    <%
+        encoded_id = trans.security.encode_id( data_manager.id )
+        if row_is_header:
+            cell_type = 'th'
+        else:
+            cell_type = 'td'
+    %>
+    <tr class="datasetRow"
+        %if parent is not None:
+            parent="${parent}"
+        %endif
+        id="libraryItem-ridm-${encoded_id}">
+        <${cell_type} style="padding-left: ${pad+20}px;">${data_manager.index | h}</${cell_type}>
+        <${cell_type}>${data_manager.error | h}</${cell_type}>
+    </tr>
+    <%
+        my_row = row_counter.count
+        row_counter.increment()
+    %>
+</%def>
+
+<%def name="render_invalid_repository_dependency( invalid_repository_dependency, pad, parent, row_counter, render_repository_actions_for='agent_shed' )">
+    <%
+        encoded_id = trans.security.encode_id( invalid_repository_dependency.id )
+    %>
+    <tr class="datasetRow"
+        %if parent is not None:
+            parent="${parent}"
+        %endif
+        id="libraryItem-rird-${encoded_id}">
+        <td style="padding-left: ${pad+20}px;">
+            ${ invalid_repository_dependency.error | h }
+        </td>
+    </tr>
+    <%
+        my_row = row_counter.count
+        row_counter.increment()
+    %>
+</%def>
+
+<%def name="render_invalid_agent( invalid_agent, pad, parent, row_counter, valid=True, render_repository_actions_for='agent_shed' )">
+    <% encoded_id = trans.security.encode_id( invalid_agent.id ) %>
+    <tr class="datasetRow"
+        %if parent is not None:
+            parent="${parent}"
+        %endif
+        id="libraryItem-rit-${encoded_id}">
+        <td style="padding-left: ${pad+20}px;">
+            %if trans.webapp.name == 'agent_shed' and invalid_agent.repository_id and invalid_agent.agent_config and invalid_agent.changeset_revision:
+                <a class="view-info" href="${h.url_for( controller='repository', action='load_invalid_agent', repository_id=trans.security.encode_id( invalid_agent.repository_id ), agent_config=invalid_agent.agent_config, changeset_revision=invalid_agent.changeset_revision, render_repository_actions_for=render_repository_actions_for )}">
+                    ${invalid_agent.agent_config | h}
+                </a>
+            %else:
+                ${invalid_agent.agent_config | h}
+            %endif
+        </td>
+    </tr>
+    <%
+        my_row = row_counter.count
+        row_counter.increment()
+    %>
+</%def>
+
+<%def name="render_invalid_agent_dependency( invalid_agent_dependency, pad, parent, row_counter, render_repository_actions_for='agent_shed' )">
+    <%
+        encoded_id = trans.security.encode_id( invalid_agent_dependency.id )
+    %>
+    <style type="text/css">
+        #invalid_td_table{ table-layout:fixed;
+                           width:100%;
+                           overflow-wrap:normal;
+                           overflow:hidden;
+                           border:0px; 
+                           word-break:keep-all;
+                           word-wrap:break-word;
+                           line-break:strict; }
+    </style>
+    <tr class="datasetRow"
+        %if parent is not None:
+            parent="${parent}"
+        %endif
+        id="libraryItem-ritd-${encoded_id}">
+        <td style="padding-left: ${pad+20}px;">
+            <table id="invalid_td_table">
+                <tr><td>${ invalid_agent_dependency.error | h }</td></tr>
+            </table>
+        </td>
+    </tr>
+    <%
+        my_row = row_counter.count
+        row_counter.increment()
+    %>
+</%def>
+
+<%def name="render_missing_test_component( missing_test_component, pad, parent, row_counter, row_is_header=False, render_repository_actions_for='agent_shed' )">
+    <%
+        encoded_id = trans.security.encode_id( missing_test_component.id )
+    %>
+    <tr class="datasetRow"
+        %if parent is not None:
+            parent="${parent}"
+        %endif
+        id="libraryItem-rmtc-${encoded_id}">
+        <td style="padding-left: ${pad+20}px;">
+            <table id="test_environment">
+                <tr><td bgcolor="#FFFFCC"><b>Agent id:</b> ${missing_test_component.agent_id | h}</td></tr>
+                <tr><td><b>Agent version:</b> ${missing_test_component.agent_version | h}</td></tr>
+                <tr><td><b>Agent guid:</b> ${missing_test_component.agent_guid | h}</td></tr>
+                <tr><td><b>Missing components:</b> <br/>${missing_test_component.missing_components | h}</td></tr>
+            </table>
+        </td>
+    </tr>
+    <%
+        my_row = row_counter.count
+        row_counter.increment()
+    %>
+</%def>
+
+<%def name="render_readme( readme, pad, parent, row_counter, render_repository_actions_for='agent_shed' )">
+    <% encoded_id = trans.security.encode_id( readme.id ) %>
+    <tr class="datasetRow"
+        %if parent is not None:
+            parent="${parent}" 
+        %endif
+        id="libraryItem-rr-${encoded_id}">
+        <td style="padding-left: ${pad+20}px;">
+            <table id="readme_files">
+                <tr><td>${ readme.text }</td></tr>
+            </table>
+        </td>
+    </tr>
+    <%
+        my_row = row_counter.count
+        row_counter.increment()
+    %>
+</%def>
+
+<%def name="render_repository_dependency( repository_dependency, pad, parent, row_counter, row_is_header=False, render_repository_actions_for='agent_shed' )">
+    <%
+        from galaxy.util import asbool
+        from agent_shed.util.shed_util_common import get_repository_by_name_and_owner
+        encoded_id = trans.security.encode_id( repository_dependency.id )
+        if trans.webapp.name == 'galaxy':
+            if repository_dependency.agent_shed_repository_id:
+                encoded_required_repository_id = trans.security.encode_id( repository_dependency.agent_shed_repository_id )
+            else:
+                encoded_required_repository_id = None
+            if repository_dependency.installation_status:
+                installation_status = str( repository_dependency.installation_status )
+            else:
+                installation_status = None
+        repository_name = str( repository_dependency.repository_name )
+        repository_owner = str( repository_dependency.repository_owner )
+        changeset_revision = str( repository_dependency.changeset_revision )
+        if asbool( str( repository_dependency.prior_installation_required ) ):
+            prior_installation_required_str = " <i>(prior install required)</i>"
+        else:
+            prior_installation_required_str = ""
+        if trans.webapp.name == 'galaxy':
+            if row_is_header:
+                cell_type = 'th'
+            else:
+                cell_type = 'td'
+            rd = None
+        else:
+            # We're in the agent shed.
+            cell_type = 'td'
+            rd = get_repository_by_name_and_owner( trans.app, repository_name, repository_owner )
+    %>
+    <tr class="datasetRow"
+        %if parent is not None:
+            parent="${parent}"
+        %endif
+        id="libraryItem-rrd-${encoded_id}">
+        %if trans.webapp.name == 'galaxy':
+            <${cell_type} style="padding-left: ${pad+20}px;">
+                %if row_is_header:
+                    ${repository_name | h}
+                %elif encoded_required_repository_id:
+                    <a class="action-button" href="${h.url_for( controller='admin_agentshed', action='manage_repository', id=encoded_required_repository_id )}">${repository_name | h}</a>
+                %else:
+                   ${repository_name | h} 
+                %endif
+            </${cell_type}>
+            <${cell_type}>
+                ${changeset_revision | h}
+            </${cell_type}>
+            <${cell_type}>
+                ${repository_owner | h}
+            </${cell_type}>
+            <${cell_type}>
+                ${installation_status}
+            </${cell_type}>
+        %else:
+            <td style="padding-left: ${pad+20}px;">
+                %if render_repository_actions_for == 'agent_shed' and rd:
+                    <a class="view-info" href="${h.url_for( controller='repository', action='view_or_manage_repository', id=trans.security.encode_id( rd.id ), changeset_revision=changeset_revision )}">Repository <b>${repository_name | h}</b> revision <b>${changeset_revision | h}</b> owned by <b>${repository_owner | h}</b></a>${prior_installation_required_str}
+                %else:
+                    Repository <b>${repository_name | h}</b> revision <b>${changeset_revision | h}</b> owned by <b>${repository_owner | h}</b>${prior_installation_required_str}
+                %endif
+            </td>
+        %endif
+    </tr>
+    <%
+        my_row = row_counter.count
+        row_counter.increment()
+    %>
+</%def>
+
+<%def name="render_table_wrap_style( table_id )">
+    <style type="text/css">
+        table.${table_id}{ table-layout:fixed;
+                           width:100%;
+                           overflow-wrap:normal;
+                           overflow:hidden;
+                           border:0px; 
+                           word-break:keep-all;
+                           word-wrap:break-word;
+                           line-break:strict; }
+        ul{ list-style-type: disc;
+            padding-left: 20px; }
+    </style>
+</%def>
+
+<%def name="render_agent_dependency_installation_error( installation_error, pad, parent, row_counter, row_is_header=False, render_repository_actions_for='agent_shed' )">
+    <%
+        from galaxy.util import unicodify
+        encoded_id = trans.security.encode_id( installation_error.id )
+    %>
+    <tr class="datasetRow"
+        %if parent is not None:
+            parent="${parent}"
+        %endif
+        id="libraryItem-rtdie-${encoded_id}">
+        <td style="padding-left: ${pad+20}px;">
+            <table id="test_environment">
+                <tr bgcolor="#FFFFCC">
+                    <th>Type</th><th>Name</th><th>Version</th>
+                </tr>
+                <tr>
+                    <td>${installation_error.name | h}</td>
+                    <td>${installation_error.type | h}</td>
+                    <td>${installation_error.version | h}</td>
+                </tr>
+                <tr><th>Error</th></tr>
+                <tr><td colspan="3">${unicodify( installation_error.error_message ) | h}</td></tr>
+            </table>
+        </td>
+    </tr>
+    <%
+        my_row = row_counter.count
+        row_counter.increment()
+    %>
+</%def>
+
+<%def name="render_agent_dependency_successful_installation( successful_installation, pad, parent, row_counter, row_is_header=False, render_repository_actions_for='agent_shed' )">
+    <%
+        encoded_id = trans.security.encode_id( successful_installation.id )
+    %>
+    <tr class="datasetRow"
+        %if parent is not None:
+            parent="${parent}"
+        %endif
+        id="libraryItem-rtdsi-${encoded_id}">
+        <td style="padding-left: ${pad+20}px;">
+            <table id="test_environment">
+                <tr bgcolor="#FFFFCC">
+                    <th>Type</th><th>Name</th><th>Version</th>
+                </tr>
+                <tr>
+                    <td>${successful_installation.name | h}</td>
+                    <td>${successful_installation.type | h}</td>
+                    <td>${successful_installation.version | h}</td>
+                </tr>
+                <tr><th>Installation directory</th></tr>
+                <tr><td colspan="3">${successful_installation.installation_directory | h}</td></tr>
+            </table>
+        </td>
+    </tr>
+    <%
+        my_row = row_counter.count
+        row_counter.increment()
+    %>
+</%def>
+
+<%def name="render_repository_installation_error( installation_error, pad, parent, row_counter, row_is_header=False, is_current_repository=False, render_repository_actions_for='agent_shed' )">
+    <%
+        from galaxy.util import unicodify
+        encoded_id = trans.security.encode_id( installation_error.id )
+    %>
+    <tr class="datasetRow"
+        %if parent is not None:
+            parent="${parent}"
+        %endif
+        id="libraryItem-rrie-${encoded_id}">
+        <td style="padding-left: ${pad+20}px;">
+            <table id="test_environment">
+                %if not is_current_repository:
+                    <tr bgcolor="#FFFFCC">
+                        <th>Agent shed</th><th>Name</th><th>Owner</th><th>Changeset revision</th>
+                    </tr>
+                    <tr>
+                        <td>${installation_error.agent_shed | h}</td>
+                        <td>${installation_error.name | h}</td>
+                        <td>${installation_error.owner | h}</td>
+                        <td>${installation_error.changeset_revision | h}</td>
+                    </tr>
+                %endif
+                <tr><th>Error</th></tr>
+                <tr><td colspan="4">${unicodify( installation_error.error_message ) | h}</td></tr>
+            </table>
+        </td>
+    </tr>
+    <%
+        my_row = row_counter.count
+        row_counter.increment()
+    %>
+</%def>
+
+<%def name="render_repository_successful_installation( successful_installation, pad, parent, row_counter, row_is_header=False, is_current_repository=False, render_repository_actions_for='agent_shed' )">
+    <%
+        encoded_id = trans.security.encode_id( successful_installation.id )
+    %>
+    <tr class="datasetRow"
+        %if parent is not None:
+            parent="${parent}"
+        %endif
+        id="libraryItem-rrsi-${encoded_id}">
+        <td style="padding-left: ${pad+20}px;">
+            <table id="test_environment">
+                %if not is_current_repository:
+                    <tr bgcolor="#FFFFCC">
+                        <th>Agent shed</th><th>Name</th><th>Owner</th><th>Changeset revision</th>
+                    </tr>
+                    <tr>
+                        <td>${successful_installation.agent_shed | h}</td>
+                        <td>${successful_installation.name | h}</td>
+                        <td>${successful_installation.owner | h}</td>
+                        <td>${successful_installation.changeset_revision | h}</td>
+                    </tr>
+                %endif
+            </table>
+        </td>
+    </tr>
+    <%
+        my_row = row_counter.count
+        row_counter.increment()
+    %>
+</%def>
+
+<%def name="render_not_tested( not_tested, pad, parent, row_counter, row_is_header=False, render_repository_actions_for='agent_shed' )">
+    <%
+        encoded_id = trans.security.encode_id( not_tested.id )
+    %>
+    <tr class="datasetRow"
+        %if parent is not None:
+            parent="${parent}"
+        %endif
+        id="libraryItem-rnt-${encoded_id}">
+        <td style="padding-left: ${pad+20}px;">
+            <table id="test_environment">
+                <tr><td>${not_tested.reason | h}</td></tr>
+            </table>
+        </td>
+    </tr>
+    <%
+        my_row = row_counter.count
+        row_counter.increment()
+    %>
+</%def>
+
+<%def name="render_passed_test( passed_test, pad, parent, row_counter, row_is_header=False, render_repository_actions_for='agent_shed' )">
+    <%
+        encoded_id = trans.security.encode_id( passed_test.id )
+    %>
+    <tr class="datasetRow"
+        %if parent is not None:
+            parent="${parent}"
+        %endif
+        id="libraryItem-rpt-${encoded_id}">
+        <td style="padding-left: ${pad+20}px;">
+            <table id="test_environment">
+                <tr><td bgcolor="#FFFFCC"><b>Agent id:</b> ${passed_test.agent_id | h}</td></tr>
+                <tr><td><b>Agent version:</b> ${passed_test.agent_id | h}</td></tr>
+                <tr><td><b>Test:</b> ${passed_test.test_id | h}</td></tr>
+            </table>
+        </td>
+    </tr>
+    <%
+        my_row = row_counter.count
+        row_counter.increment()
+    %>
+</%def>
+
+<%def name="render_agent( agent, pad, parent, row_counter, row_is_header, render_repository_actions_for='agent_shed' )">
+    <%
+        encoded_id = trans.security.encode_id( agent.id )
+        if row_is_header:
+            cell_type = 'th'
+        else:
+            cell_type = 'td'
+    %>
+    <tr class="datasetRow"
+        %if parent is not None:
+            parent="${parent}"
+        %endif
+        id="libraryItem-rt-${encoded_id}">
+        %if row_is_header:
+            <th style="padding-left: ${pad+20}px;">${agent.name | h}</th>
+        %else:
+            <td style="padding-left: ${pad+20}px;">
+                %if agent.repository_id:
+                    %if trans.webapp.name == 'agent_shed':
+                        <div style="float:left;" class="menubutton split popup" id="agent-${encoded_id}-popup">
+                            <a class="view-info" href="${h.url_for( controller='repository', action='display_agent', repository_id=trans.security.encode_id( agent.repository_id ), agent_config=agent.agent_config, changeset_revision=agent.changeset_revision, render_repository_actions_for=render_repository_actions_for )}">${agent.name | h}</a>
+                        </div>
+                        <div popupmenu="agent-${encoded_id}-popup">
+                            <a class="action-button" href="${h.url_for( controller='repository', action='view_agent_metadata', repository_id=trans.security.encode_id( agent.repository_id ), changeset_revision=agent.changeset_revision, agent_id=agent.agent_id, render_repository_actions_for=render_repository_actions_for )}">View agent metadata</a>
+                        </div>
+                    %elif trans.webapp.name == 'galaxy':
+                        %if agent.repository_installation_status == trans.install_model.AgentShedRepository.installation_status.INSTALLED:
+                            <a class="action-button" href="${h.url_for( controller='admin_agentshed', action='view_agent_metadata', repository_id=trans.security.encode_id( agent.repository_id ), changeset_revision=agent.changeset_revision, agent_id=agent.agent_id )}">${agent.name | h}</a>
+                        %else:
+                            ${agent.name | h}
+                        %endif
+                    %else:
+                        ${agent.name | h}
+                    %endif
+                %else:
+                    ${agent.name | h}
+                %endif
+            </td>
+        %endif
+        <${cell_type}>${agent.description | h}</${cell_type}>
+        <${cell_type}>${agent.version | h}</${cell_type}>
+        ##<${cell_type}>${agent.requirements | h}</${cell_type}>
+    </tr>
+    <%
+        my_row = row_counter.count
+        row_counter.increment()
+    %>
+</%def>
+
+<%def name="render_agent_dependency( agent_dependency, pad, parent, row_counter, row_is_header, render_repository_actions_for='agent_shed' )">
+    <%
+        from galaxy.util import string_as_bool
+        encoded_id = trans.security.encode_id( agent_dependency.id )
+        is_missing = agent_dependency.installation_status not in [ 'Installed' ]
+        if row_is_header:
+            cell_type = 'th'
+        else:
+            cell_type = 'td'
+    %>
+    <tr class="datasetRow"
+        %if parent is not None:
+            parent="${parent}"
+        %endif
+        id="libraryItem-rtd-${encoded_id}">
+        <${cell_type} style="padding-left: ${pad+20}px;">
+            %if row_is_header:
+                ${agent_dependency.name | h}
+            %elif trans.webapp.name == 'galaxy' and agent_dependency.agent_dependency_id:
+                %if agent_dependency.repository_id and agent_dependency.installation_status in [ trans.install_model.AgentDependency.installation_status.INSTALLED ]:
+                    <a class="action-button" href="${h.url_for( controller='admin_agentshed', action='browse_agent_dependency', id=trans.security.encode_id( agent_dependency.agent_dependency_id ) )}">
+                        ${agent_dependency.name | h}
+                    </a>
+                %elif agent_dependency.installation_status not in [ trans.install_model.AgentDependency.installation_status.UNINSTALLED ]:
+                    <a class="action-button" href="${h.url_for( controller='admin_agentshed', action='manage_repository_agent_dependencies', agent_dependency_ids=trans.security.encode_id( agent_dependency.agent_dependency_id ) )}">
+                        ${agent_dependency.name}
+                    </a>
+                %else:
+                    ${agent_dependency.name | h}
+                %endif
+            %else:
+                ${agent_dependency.name | h}
+            %endif
+        </${cell_type}>
+        <${cell_type}>
+            <%
+                if agent_dependency.version:
+                    version_str = agent_dependency.version
+                else:
+                    version_str = ''
+            %>
+            ${version_str | h}
+        </${cell_type}>
+        <${cell_type}>${agent_dependency.type | h}</${cell_type}>
+        <${cell_type}>
+            %if trans.webapp.name == 'galaxy':
+                ${agent_dependency.installation_status | h}
+            %endif
+        </${cell_type}>
+    </tr>
+    <%
+        my_row = row_counter.count
+        row_counter.increment()
+    %>
+</%def>
+
+<%def name="render_test_environment( test_environment, pad, parent, row_counter, row_is_header=False, render_repository_actions_for='agent_shed' )">
+    <% encoded_id = trans.security.encode_id( test_environment.id ) %>
+    <tr class="datasetRow"
+        %if parent is not None:
+            parent="${parent}"
+        %endif
+        id="libraryItem-rte-${encoded_id}">
+        <td style="padding-left: ${pad+20}px;">
+            <table class="grid" id="test_environment">
+                <tr><td><b>Time tested:</b> ${test_environment.time_tested | h}</td></tr>
+                <tr><td><b>System:</b> ${test_environment.system | h}</td></tr>
+                <tr><td><b>Architecture:</b> ${test_environment.architecture | h}</td></tr>
+                <tr><td><b>Python version:</b> ${test_environment.python_version | h}</td></tr>
+                <tr><td><b>Galaxy revision:</b> ${test_environment.galaxy_revision | h}</td></tr>
+                <tr><td><b>Galaxy database version:</b> ${test_environment.galaxy_database_version | h}</td></tr>
+                <tr><td><b>Agent shed revision:</b> ${test_environment.agent_shed_revision | h}</td></tr>
+                <tr><td><b>Agent shed database version:</b> ${test_environment.agent_shed_database_version | h}</td></tr>
+                <tr><td><b>Agent shed mercurial version:</b> ${test_environment.agent_shed_mercurial_version | h}</td></tr>
+            </table>
+        </td>
+    </tr>
+    <%
+        my_row = row_counter.count
+        row_counter.increment()
+    %>
+</%def>
+
+<%def name="render_valid_data_manager( data_manager, pad, parent, row_counter, row_is_header=False, render_repository_actions_for='agent_shed' )">
+    <%
+        encoded_id = trans.security.encode_id( data_manager.id )
+        if row_is_header:
+            cell_type = 'th'
+        else:
+            cell_type = 'td'
+    %>
+    <tr class="datasetRow"
+        %if parent is not None:
+            parent="${parent}"
+        %endif
+        id="libraryItem-rvdm-${encoded_id}">
+        <${cell_type} style="padding-left: ${pad+20}px;">${data_manager.name | h}</${cell_type}>
+        <${cell_type}>${data_manager.version | h}</${cell_type}>
+        <${cell_type}>${data_manager.data_tables | h}</${cell_type}>
+    </tr>
+    <%
+        my_row = row_counter.count
+        row_counter.increment()
+    %>
+</%def>
+
+<%def name="render_workflow( workflow, pad, parent, row_counter, row_is_header=False, render_repository_actions_for='agent_shed' )">
+    <%
+        from agent_shed.util.encoding_util import agent_shed_encode
+        encoded_id = trans.security.encode_id( workflow.id )
+        encoded_workflow_name = agent_shed_encode( workflow.workflow_name )
+        if trans.webapp.name == 'agent_shed':
+            encoded_repository_metadata_id = trans.security.encode_id( workflow.repository_metadata_id )
+            encoded_repository_id = None
+        else:
+            encoded_repository_metadata_id = None
+            encoded_repository_id = trans.security.encode_id( workflow.repository_id )
+        if row_is_header:
+            cell_type = 'th'
+        else:
+            cell_type = 'td'
+    %>
+    <tr class="datasetRow"
+        %if parent is not None:
+            parent="${parent}"
+        %endif
+        id="libraryItem-rw-${encoded_id}">
+        <${cell_type} style="padding-left: ${pad+20}px;">
+            %if row_is_header:
+                ${workflow.workflow_name | h}
+            %elif trans.webapp.name == 'agent_shed' and encoded_repository_metadata_id:
+                <a href="${h.url_for( controller='repository', action='view_workflow', workflow_name=encoded_workflow_name, repository_metadata_id=encoded_repository_metadata_id, render_repository_actions_for=render_repository_actions_for )}">${workflow.workflow_name | h}</a>
+            %elif trans.webapp.name == 'galaxy' and encoded_repository_id:
+                <a href="${h.url_for( controller='admin_agentshed', action='view_workflow', workflow_name=encoded_workflow_name, repository_id=encoded_repository_id )}">${workflow.workflow_name | h}</a>
+            %else:
+                ${workflow.workflow_name | h}
+            %endif
+        </${cell_type}>
+        <${cell_type}>${workflow.steps | h}</${cell_type}>
+        <${cell_type}>${workflow.format_version | h}</${cell_type}>
+        <${cell_type}>${workflow.annotation | h}</${cell_type}>
+    </tr>
+    <%
+        my_row = row_counter.count
+        row_counter.increment()
+    %>
+</%def>
+
+<%def name="render_repository_items( metadata, containers_dict, can_set_metadata=False, render_repository_actions_for='agent_shed' )">
+    <%
+        from agent_shed.util.encoding_util import agent_shed_encode
+
+        has_datatypes = metadata and 'datatypes' in metadata
+        has_readme_files = metadata and 'readme_files' in metadata
+        has_workflows = metadata and 'workflows' in metadata
+        
+        datatypes_root_folder = containers_dict.get( 'datatypes', None )
+        invalid_data_managers_root_folder = containers_dict.get( 'invalid_data_managers', None )
+        invalid_repository_dependencies_root_folder = containers_dict.get( 'invalid_repository_dependencies', None )
+        invalid_agent_dependencies_root_folder = containers_dict.get( 'invalid_agent_dependencies', None )
+        invalid_agents_root_folder = containers_dict.get( 'invalid_agents', None )
+        missing_repository_dependencies_root_folder = containers_dict.get( 'missing_repository_dependencies', None )
+        missing_agent_dependencies_root_folder = containers_dict.get( 'missing_agent_dependencies', None )
+        readme_files_root_folder = containers_dict.get( 'readme_files', None )
+        repository_dependencies_root_folder = containers_dict.get( 'repository_dependencies', None )
+        test_environment_root_folder = containers_dict.get( 'test_environment', None )
+        agent_dependencies_root_folder = containers_dict.get( 'agent_dependencies', None )
+        agent_test_results_root_folder = containers_dict.get( 'agent_test_results', None )
+        valid_data_managers_root_folder = containers_dict.get( 'valid_data_managers', None )
+        valid_agents_root_folder = containers_dict.get( 'valid_agents', None )
+        workflows_root_folder = containers_dict.get( 'workflows', None )
+        
+        has_contents = datatypes_root_folder or invalid_agents_root_folder or valid_agents_root_folder or workflows_root_folder
+        has_dependencies = \
+            invalid_repository_dependencies_root_folder or \
+            invalid_agent_dependencies_root_folder or \
+            missing_repository_dependencies_root_folder or \
+            repository_dependencies_root_folder or \
+            agent_dependencies_root_folder or \
+            missing_agent_dependencies_root_folder
+
+        class RowCounter( object ):
+            def __init__( self ):
+                self.count = 0
+            def increment( self ):
+                self.count += 1
+            def __str__( self ):
+                return str( self.count )
+    %>
+    %if readme_files_root_folder:
+        ${render_table_wrap_style( "readme_files" )}
+        <p/>
+        <div class="agentForm">
+            <div class="agentFormTitle">Repository README files - may contain important installation or license information</div>
+            <div class="agentFormBody">
+                <p/>
+                <% row_counter = RowCounter() %>
+                <table cellspacing="2" cellpadding="2" border="0" width="100%" class="tables container-table" id="readme_files">
+                    ${render_folder( readme_files_root_folder, 0, parent=None, row_counter=row_counter, is_root_folder=True, render_repository_actions_for=render_repository_actions_for )}
+                </table>
+            </div>
+        </div>
+    %endif
+    %if has_dependencies:
+        <div class="agentForm">
+            <div class="agentFormTitle">Dependencies of this repository</div>
+            <div class="agentFormBody">
+                %if invalid_repository_dependencies_root_folder:
+                    <p/>
+                    <% row_counter = RowCounter() %>
+                    <table cellspacing="2" cellpadding="2" border="0" width="100%" class="tables container-table" id="invalid_repository_dependencies">
+                        ${render_folder( invalid_repository_dependencies_root_folder, 0, parent=None, row_counter=row_counter, is_root_folder=True, render_repository_actions_for=render_repository_actions_for )}
+                    </table>
+                %endif
+                %if missing_repository_dependencies_root_folder:
+                    <p/>
+                    <% row_counter = RowCounter() %>
+                    <table cellspacing="2" cellpadding="2" border="0" width="100%" class="tables container-table" id="missing_repository_dependencies">
+                        ${render_folder( missing_repository_dependencies_root_folder, 0, parent=None, row_counter=row_counter, is_root_folder=True, render_repository_actions_for=render_repository_actions_for )}
+                    </table>
+                %endif
+                %if repository_dependencies_root_folder:
+                    <p/>
+                    <% row_counter = RowCounter() %>
+                    <table cellspacing="2" cellpadding="2" border="0" width="100%" class="tables container-table" id="repository_dependencies">
+                        ${render_folder( repository_dependencies_root_folder, 0, parent=None, row_counter=row_counter, is_root_folder=True, render_repository_actions_for=render_repository_actions_for )}
+                    </table>
+                %endif
+                %if invalid_agent_dependencies_root_folder:
+                    <p/>
+                    <% row_counter = RowCounter() %>
+                    <table cellspacing="2" cellpadding="2" border="0" width="100%" class="tables container-table" id="invalid_agent_dependencies">
+                        ${render_folder( invalid_agent_dependencies_root_folder, 0, parent=None, row_counter=row_counter, is_root_folder=True, render_repository_actions_for=render_repository_actions_for )}
+                    </table>
+                %endif
+                %if agent_dependencies_root_folder:
+                    <p/>
+                    <% row_counter = RowCounter() %>
+                    <table cellspacing="2" cellpadding="2" border="0" width="100%" class="tables container-table" id="agent_dependencies">
+                        ${render_folder( agent_dependencies_root_folder, 0, parent=None, row_counter=row_counter, is_root_folder=True, render_repository_actions_for=render_repository_actions_for )}
+                    </table>
+                %endif
+                %if missing_agent_dependencies_root_folder:
+                    <p/>
+                    <% row_counter = RowCounter() %>
+                    <table cellspacing="2" cellpadding="2" border="0" width="100%" class="tables container-table" id="missing_agent_dependencies">
+                        ${render_folder( missing_agent_dependencies_root_folder, 0, parent=None, row_counter=row_counter, is_root_folder=True, render_repository_actions_for=render_repository_actions_for )}
+                    </table>
+                %endif
+            </div>
+        </div>
+    %endif
+    %if has_contents:
+        <p/>
+        <div class="agentForm">
+            <div class="agentFormTitle">Contents of this repository</div>
+            <div class="agentFormBody">
+                %if valid_agents_root_folder:
+                    <p/>
+                    <% row_counter = RowCounter() %>
+                    <table cellspacing="2" cellpadding="2" border="0" width="100%" class="tables container-table" id="valid_agents">
+                        ${render_folder( valid_agents_root_folder, 0, parent=None, row_counter=row_counter, is_root_folder=True, render_repository_actions_for=render_repository_actions_for )}
+                    </table>
+                %endif
+                %if invalid_agents_root_folder:
+                    <p/>
+                    <% row_counter = RowCounter() %>
+                    <table cellspacing="2" cellpadding="2" border="0" width="100%" class="tables container-table" id="invalid_agents">
+                        ${render_folder( invalid_agents_root_folder, 0, parent=None, row_counter=row_counter, is_root_folder=True, render_repository_actions_for=render_repository_actions_for )}
+                    </table>
+                %endif
+                %if valid_data_managers_root_folder:
+                    <p/>
+                    <% row_counter = RowCounter() %>
+                    <table cellspacing="2" cellpadding="2" border="0" width="100%" class="tables container-table" id="valid_data_managers">
+                        ${render_folder( valid_data_managers_root_folder, 0, parent=None, row_counter=row_counter, is_root_folder=True, render_repository_actions_for=render_repository_actions_for )}
+                    </table>
+                %endif
+                %if invalid_data_managers_root_folder:
+                    <p/>
+                    <% row_counter = RowCounter() %>
+                    <table cellspacing="2" cellpadding="2" border="0" width="100%" class="tables container-table" id="invalid_data_managers">
+                        ${render_folder( invalid_data_managers_root_folder, 0, parent=None, row_counter=row_counter, is_root_folder=True, render_repository_actions_for=render_repository_actions_for )}
+                    </table>
+                %endif
+                %if workflows_root_folder:
+                    <p/>
+                    <% row_counter = RowCounter() %>
+                    <table cellspacing="2" cellpadding="2" border="0" width="100%" class="tables container-table" id="workflows">
+                        ${render_folder( workflows_root_folder, 0, parent=None, row_counter=row_counter, is_root_folder=True, render_repository_actions_for=render_repository_actions_for )}
+                    </table>
+                %endif
+                %if datatypes_root_folder:
+                    <p/>
+                    <% row_counter = RowCounter() %>
+                    <table cellspacing="2" cellpadding="2" border="0" width="100%" class="tables container-table" id="datatypes">
+                        ${render_folder( datatypes_root_folder, 0, parent=None, row_counter=row_counter, is_root_folder=True, render_repository_actions_for=render_repository_actions_for )}
+                    </table>
+                %endif
+            </div>
+        </div>
+    %endif
+    %if agent_test_results_root_folder and trans.app.config.display_legacy_test_results:
+        ${render_table_wrap_style( "test_environment" )}
+        <p/>
+        <div class="agentForm">
+            <div class="agentFormTitle">Automated agent test results</div>
+            <div class="agentFormBody">
+                <p/>
+                <% row_counter = RowCounter() %>
+                <table cellspacing="2" cellpadding="2" border="0" width="100%" class="tables container-table" id="test_environment">
+                    ${render_folder( agent_test_results_root_folder, 0, parent=None, row_counter=row_counter, is_root_folder=True, render_repository_actions_for=render_repository_actions_for )}
+                </table>
+            </div>
+        </div>
+    %endif
+</%def>

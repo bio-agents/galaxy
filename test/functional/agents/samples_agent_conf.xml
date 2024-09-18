@@ -1,0 +1,95 @@
+<?xml version="1.0"?>
+<agentbox agent_path="${agent_conf_dir}">
+  <agent file="upload.xml"/>
+  <agent file="simple_constructs.xml" />
+  <agent file="inheritance_simple.xml" />
+  <agent file="boolean_conditional.xml" />
+  <agent file="composite.xml" />
+  <agent file="environment_variables.xml" />
+  <agent file="code_file.xml" />
+  <agent file="disambiguate_cond.xml" />
+  <agent file="multi_repeats.xml"/>
+  <agent file="multi_page.xml"/>
+  <agent file="library_data.xml"/>
+  <agent file="multi_select.xml" />
+  <agent file="multi_output.xml" />
+  <agent file="multi_output_configured.xml" />
+  <agent file="multi_output_assign_primary.xml" />
+  <agent file="inputs_as_json.xml" />
+  <agent file="dbkey_filter_input.xml" />
+  <agent file="dbkey_filter_multi_input.xml" />
+  <agent file="composite_output.xml" />
+  <agent file="unicode_stream.xml" />
+  <agent file="metadata.xml" />
+  <agent file="metadata_bam.xml" />
+  <agent file="metadata_bcf.xml" />
+  <agent file="detect_errors_aggressive.xml" />
+  <agent file="md5sum.xml" />
+  <!--
+  TODO: Figure out why this transiently fails on Jenkins.
+  <agent file="maxseconds.xml" />
+  -->
+  <agent file="job_properties.xml" />
+  <agent file="gzipped_inputs.xml" />
+  <agent file="output_order.xml" />
+  <agent file="output_format.xml" />
+  <agent file="output_format_collection.xml" />
+  <agent file="output_filter.xml" />
+  <agent file="output_collection_filter.xml" />
+  <agent file="output_auto_format.xml" />
+  <agent file="create_10.xml" />
+  <agent file="disambiguate_repeats.xml" />
+  <agent file="min_repeat.xml" />
+  <agent file="parallelism.xml" />
+  <agent file="parallelism_optional.xml" />
+  <agent file="implicit_default_conds.xml" />
+  <agent file="multi_data_param.xml" />
+  <agent file="column_param.xml" />
+  <agent file="column_multi_param.xml" />
+  <agent file="special_params.xml" />
+  <agent file="section.xml" />
+  <agent file="top_level_data.xml" />
+  <agent file="validation_default.xml" />
+  <agent file="validation_sanitizer.xml" />
+  <agent file="validation_repeat.xml" />
+  <agent file="identifier_single.xml" />
+  <agent file="identifier_multiple.xml" />
+  <agent file="agent_directory.xml" />
+  <agent file="output_action_change_format.xml" />
+  <agent file="collection_paired_test.xml" />
+  <agent file="collection_nested_test.xml" />
+  <agent file="collection_mixed_param.xml" />
+  <agent file="collection_two_paired.xml" />
+  <agent file="collection_creates_pair.xml" />
+  <agent file="collection_creates_pair_from_type.xml" />
+  <agent file="collection_creates_list.xml" />
+  <agent file="collection_creates_list_2.xml" />
+  <agent file="collection_creates_list_of_pairs.xml" />
+  <agent file="collection_optional_param.xml" />
+  <agent file="collection_split_on_column.xml" />
+  <agent file="collection_creates_dynamic_nested.xml" />
+  <agent file="collection_creates_dynamic_list_of_pairs.xml" />
+  <agent file="collection_type_source.xml" />
+  <agent file="cheetah_casting.xml" />
+
+  <agent file="cheetah_problem_unbound_var.xml" />
+  <agent file="cheetah_problem_unbound_var_input.xml" />
+  <agent file="cheetah_problem_syntax_error.xml" />
+
+  <agent file="multiple_versions_v01.xml" />
+  <agent file="multiple_versions_v02.xml" />
+
+  <!-- Agents interesting only for building up test workflows. -->
+
+  <!-- Next three agents demonstrate concatenating multiple datasets
+       with a repeat, multiple datasets with a multiple input data
+       parameter, and multiple datasets from a collection. -->
+  <agent file="for_workflows/cat.xml" />
+  <agent file="for_workflows/cat_list.xml" />
+  <agent file="for_workflows/cat_collection.xml" />
+  <agent file="for_workflows/head.xml" />
+  <agent file="for_workflows/cat_interleave.xml" />
+
+  <agent file="simple_constructs.yml" />
+
+</agentbox>

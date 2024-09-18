@@ -1,0 +1,16 @@
+<agent id="__EXPORT_HISTORY__" name="Export History" version="0.1" agent_type="export_history">
+  <type class="ExportHistoryAgent" module="galaxy.agents"/>
+  <action module="galaxy.agents.actions.history_imp_exp" class="ExportHistoryAgentAction"/>
+  <command>python $export_history $__EXPORT_HISTORY_COMMAND_INPUTS_OPTIONS__ $output_file</command>
+  <inputs>
+    <param name="__HISTORY_TO_EXPORT__" type="hidden"/>
+    <param name="compress" type="boolean"/>
+    <param name="__EXPORT_HISTORY_COMMAND_INPUTS_OPTIONS__" type="hidden"/>
+  </inputs>
+  <configfiles>
+    <configfile name="export_history">from galaxy.agents.imp_exp.export_history import main; main()</configfile>
+  </configfiles>
+  <outputs>
+    <data format="gzip" name="output_file"/>
+  </outputs>
+</agent>

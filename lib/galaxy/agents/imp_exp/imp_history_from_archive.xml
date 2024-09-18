@@ -1,0 +1,14 @@
+<agent id="__IMPORT_HISTORY__" name="Import History" version="0.1" agent_type="import_history">
+  <type class="ImportHistoryAgent" module="galaxy.agents"/>
+  <action module="galaxy.agents.actions.history_imp_exp" class="ImportHistoryAgentAction"/>
+  <command interpreter="python">unpack_tar_gz_archive.py "${ str( $__ARCHIVE_SOURCE__ ).encode( 'base64' ) }" "${ str( $__DEST_DIR__ ).encode( 'base64' ) }" --$__ARCHIVE_TYPE__ --encoded</command>
+  <inputs>
+    <param name="__ARCHIVE_SOURCE__" type="text">
+      <sanitizer sanitize="False"/>
+    </param>
+    <param name="__ARCHIVE_TYPE__" type="text"/>
+    <param name="__DEST_DIR__" type="text">
+      <sanitizer sanitize="False"/>
+    </param>
+  </inputs>
+</agent>

@@ -1,0 +1,6 @@
+<?xml version="1.0"?>
+<agentshed name="agentshed.g2.bx.psu.edu">
+    <repository name="freebayes" description="Galaxy Freebayes Bayesian genetic variant detector agent" changeset_revision="213a3d6b579a">
+        <agent id="freebayes" version="0.0.2 " file="variant_detection/freebayes.xml" />
+    </repository>
+</agentshed>

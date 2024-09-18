@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<agentshed name="agentshed.g2.bx.psu.edu">
+    <repository name="picard" description="Galaxy wrappers for the Picard SAM/BAM manipulation agents." changeset_revision="e0232cbac965">
+        <agent id="picard_FastqToSam" version="1.56.0" file="picard/picard_FastqToSam.xml" />
+        <agent id="picard_SamToFastq" version="1.56.1" file="picard/picard_SamToFastq.xml" />
+        <agent id="picard_BamIndexStats" version="1.56.0" file="picard/picard_BamIndexStats.xml" />
+        <agent id="PicardASMetrics" version="1.56.0" file="picard/rgPicardASMetrics.xml" />
+        <agent id="PicardGCBiasMetrics" version="1.56.0" file="picard/rgPicardGCBiasMetrics.xml" />
+        <agent id="rgEstLibComp" version="1.56.0" file="picard/rgPicardLibComplexity.xml" />
+        <agent id="PicardInsertSize" version="1.56.0" file="picard/rgPicardInsertSize.xml" />
+        <agent id="PicardHsMetrics" version="1.56.0" file="picard/rgPicardHsMetrics.xml" />
+        <agent id="picard_ARRG" version="1.56.0" file="picard/picard_AddOrReplaceReadGroups.xml" />
+        <agent id="picard_ReorderSam" version="1.56.0" file="picard/picard_ReorderSam.xml" />
+        <agent id="picard_ReplaceSamHeader" version="1.56.0" file="picard/picard_ReplaceSamHeader.xml" />
+        <agent id="rgPicFixMate" version="1.56.0" file="picard/rgPicardFixMate.xml" />
+        <agent id="rgPicardMarkDups" version="1.56.0" file="picard/rgPicardMarkDups.xml" />
+    </repository>
+</agentshed>

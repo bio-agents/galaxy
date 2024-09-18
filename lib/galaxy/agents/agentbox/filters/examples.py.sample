@@ -1,0 +1,87 @@
+import logging
+log = logging.getLogger( __name__ )
+
+
+def restrict_upload_to_admins( context, agent ):
+    """
+    This agent filter will hide the upload agent from all users except admin
+    users. This can be enabled by renaming this file to examples.py and adding
+    the following to the ``app:main`` section of ``galaxy.ini``:
+
+        agent_filters = examples:restrict_upload_to_admins
+    """
+    if agent.name == "Upload File":
+        return context.trans.user_is_admin()
+    return True
+
+
+def disable_gatk( context, agent ):
+    """
+    This agent filter will disable all gatk agents when enabled. This can be
+    enabled by renaming this file to examples.py and adding the following to the
+     ``app:main`` section of ``galaxy.ini``:
+
+        agent_filters = examples:disable_gatk
+    """
+    return not any( [ requirement.name == "gatk" for requirement in agent.requirements ] )
+
+
+def explicit_user_mapping( context, section ):
+    """
+    This agent section filter uses an explicit mapping to describe what users can view
+    which agent sections. Anonymous users will only be able to view the "Get Data"
+    agent section (with id getext). This can be enabled by renaming this file to
+    examples.py and adding the following to the ``app:main`` section of
+    ``galaxy.ini``:
+
+        agent_section_filters = examples:explicit_user_mapping
+    """
+    users_sections = {
+        None: [ "getext" ],
+        "bob@example.com": [ "getext", "textutil", "filter" ],
+        "mary@example.com": [ "getext", "textutil", "filter", "ngs" ],
+    }
+    user = context.trans.user
+    email = user and user.email
+    valid_sections = users_sections.get( email, [] )
+    return section.id in valid_sections
+
+
+DEVELOPERS = [ "mary@example.com" ]
+
+
+def restrict_development_agents( context, agent ):
+    """
+    This agent filter will disable all agents with the string alpha appearing in
+    the version for all users except those explicitly appearing in the DEVELOPERS list
+    defined above. This can be enabled by renaming this file to examples.py and
+    adding the following to the ``app:main`` section of ``galaxy.ini``:
+
+        agent_filters = examples:restrict_development_agents
+    """
+    version = agent.version
+    user = context.trans.user
+    email = user and user.email
+    return "alpha" not in version or email in DEVELOPERS
+
+
+def per_host_agent_sections( context, section ):
+    """
+    This agent section filter results in different sections being display based on
+    the URL the user is making the request to. This could allow a single Galaxy instance
+    to seem like several different instances hosting different agents based on the URL used
+    to access the Galxy. This can be enabled by renaming this file to examples.py and adding
+    the following to the ``app:main`` section of ``galaxy.ini``:
+
+        agent_section_filters = examples:per_host_agent_sections
+    """
+    host = context.trans.request.host
+    # Core agents used by all virtual hosts.
+    valid_sections = [ "getext", "textutil", "filter" ]
+    if "ngs.galaxy.example.com" in host:
+        valid_sections += [ "ngs" ]
+    elif "microarray.galaxy.example.com" in host:
+        valid_sections += [ "microarray" ]
+    elif "proteomics.galaxy.example.com" in host:
+        valid_sections += [ "proteomics" ]
+    return section.id in valid_sections

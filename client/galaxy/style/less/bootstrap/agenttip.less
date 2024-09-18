@@ -1,0 +1,95 @@
+//
+// Agenttips
+// --------------------------------------------------
+
+
+// Base class
+.agenttip {
+  position: absolute;
+  z-index: @zindex-agenttip;
+  display: block;
+  visibility: visible;
+  font-size: @font-size-small;
+  line-height: 1.4;
+  .opacity(0);
+
+  &.in     { .opacity(.9); }
+  &.top    { margin-top:  -3px; padding: 5px 0; }
+  &.right  { margin-left:  3px; padding: 0 5px; }
+  &.bottom { margin-top:   3px; padding: 5px 0; }
+  &.left   { margin-left: -3px; padding: 0 5px; }
+}
+
+// Wrapper for the agenttip content
+.agenttip-inner {
+  max-width: @agenttip-max-width;
+  padding: 3px 8px;
+  color: @agenttip-color;
+  text-align: center;
+  text-decoration: none;
+  background-color: @agenttip-bg;
+  border-radius: @border-radius-base;
+}
+
+// Arrows
+.agenttip-arrow {
+  position: absolute;
+  width: 0;
+  height: 0;
+  border-color: transparent;
+  border-style: solid;
+}
+.agenttip {
+  &.top .agenttip-arrow {
+    bottom: 0;
+    left: 50%;
+    margin-left: -@agenttip-arrow-width;
+    border-width: @agenttip-arrow-width @agenttip-arrow-width 0;
+    border-top-color: @agenttip-arrow-color;
+  }
+  &.top-left .agenttip-arrow {
+    bottom: 0;
+    left: 5px;
+    border-width: @agenttip-arrow-width @agenttip-arrow-width 0;
+    border-top-color: @agenttip-arrow-color;
+  }
+  &.top-right .agenttip-arrow {
+    bottom: 0;
+    right: 5px;
+    border-width: @agenttip-arrow-width @agenttip-arrow-width 0;
+    border-top-color: @agenttip-arrow-color;
+  }
+  &.right .agenttip-arrow {
+    top: 50%;
+    left: 0;
+    margin-top: -@agenttip-arrow-width;
+    border-width: @agenttip-arrow-width @agenttip-arrow-width @agenttip-arrow-width 0;
+    border-right-color: @agenttip-arrow-color;
+  }
+  &.left .agenttip-arrow {
+    top: 50%;
+    right: 0;
+    margin-top: -@agenttip-arrow-width;
+    border-width: @agenttip-arrow-width 0 @agenttip-arrow-width @agenttip-arrow-width;
+    border-left-color: @agenttip-arrow-color;
+  }
+  &.bottom .agenttip-arrow {
+    top: 0;
+    left: 50%;
+    margin-left: -@agenttip-arrow-width;
+    border-width: 0 @agenttip-arrow-width @agenttip-arrow-width;
+    border-bottom-color: @agenttip-arrow-color;
+  }
+  &.bottom-left .agenttip-arrow {
+    top: 0;
+    left: 5px;
+    border-width: 0 @agenttip-arrow-width @agenttip-arrow-width;
+    border-bottom-color: @agenttip-arrow-color;
+  }
+  &.bottom-right .agenttip-arrow {
+    top: 0;
+    right: 5px;
+    border-width: 0 @agenttip-arrow-width @agenttip-arrow-width;
+    border-bottom-color: @agenttip-arrow-color;
+  }
+}
